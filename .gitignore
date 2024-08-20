@@ -1,0 +1,8 @@
+*.db
+*.log
+*.yaml.save
+.storage/
+secrets.yaml
+*.mp4
+*.jpg
+*.png

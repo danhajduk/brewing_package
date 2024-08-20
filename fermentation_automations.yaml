@@ -1,0 +1,137 @@
+automation:
+  - alias: Notify High Fermentation Temperature
+    trigger:
+      platform: numeric_state
+      entity_id: sensor.ispindel001_temperature
+      above: 29 # Trigger when temperature exceeds 29°C
+      for:
+        minutes: 10 # Ensures temperature stays high for at least 10 minutes
+    action:
+      - service: notify.mobile_app_dans_iphone14
+        data:
+          message: "Warning: Fermentation temperature is above 29°C. Cooling may be needed."
+
+  - alias: Start Fermentation
+    trigger:
+      platform: state
+      entity_id: input_boolean.fermentation_started
+      to: "on"
+    action:
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.fermentation_start_time
+        data:
+          timestamp: "{{ now().timestamp() }}"
+
+  - alias: Stop Fermentation
+    trigger:
+      platform: state
+      entity_id: input_boolean.fermentation_started
+      to: "off"
+    action:
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.fermentation_start_time
+        data:
+          timestamp: "0"
+
+  - alias: Update Previous Gravity Reading
+    trigger:
+      platform: time_pattern
+      minutes: "/30"
+    action:
+      service: input_number.set_value
+      target:
+        entity_id: input_number.previous_gravity_reading
+      data:
+        value: "{{ states('sensor.ispindel001_gravity') | float(0) | default(0) }}"
+
+  - alias: Notify When Fermentation Complete
+    trigger:
+      platform: state
+      entity_id: sensor.is_gravity_stable
+      to: "True"
+      for:
+        hours: "{{ states('input_number.gravity_stable_threshold') | int }}"
+    condition:
+      condition: state
+      entity_id: sensor.is_fermentation_active
+      state: "False"
+    action:
+      - service: notify.mobile_app_dans_iphone14
+        data:
+          message: "Fermentation is complete. Gravity readings have been stable for {{ states('input_number.gravity_stable_threshold') }} hours and CO2 levels indicate fermentation is inactive."
+
+  - alias: Report Data to BrewersFriend
+    trigger:
+      platform: time_pattern
+      minutes: "/15"
+    condition:
+      - condition: state
+        entity_id: input_boolean.report_to_brewersfriend
+        state: "on"
+    action:
+      - service: script.report_to_brewersfriend
+
+  - alias: Notify When iSpindel Battery is Low
+    trigger:
+      platform: numeric_state
+      entity_id: sensor.ispindel001_battery_voltage
+      below: 3.3
+    action:
+      - service: notify.mobile_app_dans_iphone14
+        data:
+          message: "Warning: iSpindel battery voltage is low ({{ states('sensor.ispindel001_battery_voltage') | float(0) }}V). Please recharge soon."
+
+  - alias: Notify When Error Sending Data to BrewersFriend
+    trigger:
+      platform: state
+      entity_id: input_text.brewersfriend_status
+      to: "Failed to Send"
+    action:
+      - service: notify.mobile_app_dans_iphone14
+        data:
+          message: "Error: Failed to send data to BrewersFriend."
+
+script:
+  report_to_brewersfriend:
+    sequence:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.brewersfriend_status
+        data:
+          value: Sending data to BrewersFriend.com
+      - service: rest_command.report_to_brewersfriend
+        response_variable: brewersfriend_response
+      - if: "{{ brewersfriend_response.status == 200 }}"
+        then:
+          - service: input_text.set_value
+            target:
+              entity_id: input_text.brewersfriend_status
+            data:
+              value: "Successfully Sent"
+        else:
+          - service: input_text.set_value
+            target:
+              entity_id: input_text.brewersfriend_status
+            data:
+              value: "Failed to Send"
+
+rest_command:
+  report_to_brewersfriend:
+    url: "https://log.brewersfriend.com/stream/95c241ab33c0b51e0307ddae67ce602040d12ea5"
+    method: POST
+    headers:
+      Content-Type: "application/json"
+    payload: >
+      {
+        "name": "Dans Brew",
+        "og": "{{ states('input_number.original_gravity') | float(0) | default(0) }}",  
+        "temp": "{{ states('sensor.ispindel001_temperature') | float(0) | default(0) }}",
+        "ambient": "{{ states('sensor.kitchen_temp_in_c') | float(0) | default(0) }}",
+        "temp_unit": "C",
+        "gravity_unit": "G",
+        "gravity": "{{ states('sensor.ispindel001_gravity') | float(0) | default(0) }}",
+        "battery": "{{ states('sensor.ispindel001_battery_voltage') | float(0) | default(0) }}",
+        "co2": "{{ states('sensor.fermentation_lid_bucket_fermentation_co2_sensor_1') | float(0) | default(0) }}"
+      }

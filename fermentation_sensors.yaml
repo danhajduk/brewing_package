@@ -1,0 +1,142 @@
+# Template Sensors
+sensor:
+  - platform: statistics
+    name: "Average Fermentation Temperature"
+    entity_id: sensor.ispindel001_temperature
+    state_characteristic: mean
+    sampling_size: 100
+    max_age:
+      minutes: 1440 # Track over the last 24 hours
+    unique_id: sensor_average_fermentation_temperature
+
+  - platform: statistics
+    name: "Average Humidity"
+    entity_id: sensor.kitchen_temperature_humidity
+    state_characteristic: mean
+    sampling_size: 100
+    max_age:
+      minutes: 1440 # Track over the last 24 hours
+    unique_id: sensor_average_humidity
+
+  - platform: template
+    sensors:
+      is_gravity_stable:
+        friendly_name: "Is Gravity Stable?"
+        value_template: >
+          {% set current_reading = states('sensor.ispindel001_gravity') | float(0) | default(0) %}
+          {% set previous_reading = states('input_number.previous_gravity_reading') | float(0) | default(0) %}
+          {{ current_reading == previous_reading }}
+        unique_id: sensor_is_gravity_stable
+
+      abv:
+        friendly_name: "Alcohol By Volume (ABV)"
+        unit_of_measurement: "%"
+        value_template: >
+          {% set og = states('input_number.original_gravity') | float(0) | default(0) %}
+          {% set fg = states('sensor.ispindel001_gravity') | float(0) | default(0) %}
+          {% if fg > 0 and og > 0 %}
+            {{ ((og - fg) * 131.25) | round(2) }}
+          {% else %}
+            "unknown"
+          {% endif %}
+        unique_id: sensor_abv
+
+      is_fermentation_active:
+        friendly_name: "Is Fermentation Active?"
+        value_template: >
+          {% set co2_level = states('sensor.fermentation_lid_bucket_fermentation_co2_sensor_1') | float(0) | default(0) %}
+          {{ co2_level > 1000 }}  # Example threshold for CO2 level indicating active fermentation
+        unique_id: sensor_is_fermentation_active
+
+      brewersfriend_status:
+        friendly_name: "BrewersFriend Data Status"
+        value_template: "{{ states('input_text.brewersfriend_status') }}"
+        unique_id: sensor_brewersfriend_status
+
+      fermentation_duration:
+        friendly_name: "Fermentation Duration"
+        value_template: >
+          {% if is_state('input_boolean.fermentation_started', 'on') %}
+            {% set start_time = as_timestamp(states('input_datetime.fermentation_start_time')) %}
+            {% set now_time = as_timestamp(utcnow()) %}
+            {% set duration = (now_time - start_time) %}
+            
+            {% set days = duration // 86400 %}
+            {% set hours = (duration % 86400) // 3600 %}
+            {% set minutes = (duration % 3600) // 60 %}
+            
+            {% if days > 0 %}
+              {{ days |int}}d {{ hours |int}}h {{ minutes |int}}m
+            {% else %}
+              {{ hours |int}}h {{ minutes |int}}m
+            {% endif %}
+          {% else %}
+            Not Fermenting
+          {% endif %}
+        unique_id: sensor_fermentation_duration
+
+      ispindel_battery_percentage:
+        friendly_name: "iSpindel Battery Percentage"
+        unit_of_measurement: "%"
+        value_template: >
+          {% set voltage = states('sensor.ispindel001_battery_voltage') | float(0) | default(0) %}
+          {% set percentage = ((voltage - 3.0) / (4.305 - 3.0)) * 100 %}
+          {{ percentage | round(0) }}
+        unique_id: sensor_ispindel_battery_percentage
+
+      gravity_trend:
+        friendly_name: "Gravity Trend"
+        unit_of_measurement: "SG/hour"
+        value_template: >
+          {% set current_gravity = states('sensor.ispindel001_gravity') | float(0) | default(0) %}
+          {% set previous_gravity = states('input_number.previous_gravity_reading') | float(0) | default(0) %}
+          {% set duration_hours = (utcnow().timestamp() - as_timestamp(states('input_datetime.fermentation_start_time'))) / 3600 %}
+          {{ ((previous_gravity - current_gravity) / duration_hours) | round(4) if duration_hours > 0 else "unknown" }}
+        unique_id: sensor_gravity_trend
+
+      estimated_time_to_fg:
+        friendly_name: "Estimated Time to Final Gravity"
+        unit_of_measurement: "hours"
+        value_template: >
+          {% set current_gravity = states('sensor.ispindel001_gravity') | float(0) | default(0) %}
+          {% set final_gravity = 1.010 %}
+          {% set gravity_trend = states('sensor.gravity_trend') | float(0) | default(0) %}
+          {% if gravity_trend > 0 %}
+            {{ ((current_gravity - final_gravity) / gravity_trend * 24) | round(1) }}
+          {% else %}
+            "unknown"
+          {% endif %}
+        unique_id: sensor_estimated_time_to_fg
+
+      fermentation_phase:
+        friendly_name: "Fermentation Phase"
+        value_template: >
+          {% set co2_level = states('sensor.fermentation_lid_bucket_fermentation_co2_sensor_1') | float(0) | default(0) %}
+          {% set current_gravity = states('sensor.ispindel001_gravity') | float(0) | default(0) %}
+          {% set previous_gravity = states('input_number.previous_gravity_reading') | float(0) | default(0) %}
+          {% set gravity_trend = (previous_gravity - current_gravity) %}
+          {% set start_time = as_timestamp(states('input_datetime.fermentation_start_time')) %}
+          {% set duration_hours = (utcnow().timestamp() - start_time) / 3600 %}
+
+          {% if duration_hours < 6 and gravity_trend == 0 %}
+            "Fermentation Not Yet Started"
+          {% elif states('sensor.fermentation_lid_bucket_fermentation_co2_sensor_1') == 'unavailable' %}
+            {% if current_gravity <= 1.010 and gravity_trend < 0.001 %}
+              "Completed"
+            {% elif gravity_trend > 0 %}
+              "Active"
+            {% else %}
+              "Slow"
+            {% endif %}
+          {% else %}
+            {% if co2_level > 1500 and gravity_trend > 0 %}
+              "Active"
+            {% elif current_gravity <= 1.010 and gravity_trend < 0.001 %}
+              "Completed"
+            {% elif gravity_trend < 0.001 %}
+              "Slow"
+            {% else %}
+              "Unknown"
+            {% endif %}
+          {% endif %}
+        unique_id: sensor_fermentation_phase

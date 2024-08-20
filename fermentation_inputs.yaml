@@ -1,0 +1,39 @@
+# Inputs for manual adjustments and fermentation start
+input_number:
+  gravity_stable_threshold:
+    name: Gravity Stability Threshold
+    min: 1
+    max: 72
+    step: 1
+    unit_of_measurement: hours
+    mode: box
+
+  previous_gravity_reading:
+    name: Previous Gravity Reading
+    min: 0.980
+    max: 1.200
+    step: 0.001
+    unit_of_measurement: "SG"
+
+  original_gravity:
+    name: Original Gravity
+    min: 1.000
+    max: 1.200
+    step: 0.001
+    unit_of_measurement: "SG"
+    mode: box
+
+input_boolean:
+  fermentation_started:
+    name: Fermentation Started
+    icon: mdi:play-circle
+
+  report_to_brewersfriend:
+    name: Report to BrewersFriend
+    initial: off
+
+input_datetime:
+  fermentation_start_time:
+    name: Fermentation Start Time
+    has_date: true
+    has_time: true
