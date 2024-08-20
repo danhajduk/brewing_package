@@ -1,25 +1,30 @@
-# Template Sensors
+# Template Sensors Configuration
+
 sensor:
+  # Calculate the average fermentation temperature over the last 24 hours
   - platform: statistics
     name: "Average Fermentation Temperature"
     entity_id: sensor.ispindel001_temperature
-    state_characteristic: mean
-    sampling_size: 100
+    state_characteristic: mean # Calculate the mean temperature
+    sampling_size: 100 # Number of samples to keep
     max_age:
       minutes: 1440 # Track over the last 24 hours
     unique_id: sensor_average_fermentation_temperature
 
+  # Calculate the average humidity in the kitchen over the last 24 hours
   - platform: statistics
     name: "Average Humidity"
     entity_id: sensor.kitchen_temperature_humidity
-    state_characteristic: mean
-    sampling_size: 100
+    state_characteristic: mean # Calculate the mean humidity
+    sampling_size: 100 # Number of samples to keep
     max_age:
       minutes: 1440 # Track over the last 24 hours
     unique_id: sensor_average_humidity
 
+  # Template sensors for various fermentation-related metrics
   - platform: template
     sensors:
+      # Determine if gravity is stable by comparing the current and previous gravity readings
       is_gravity_stable:
         friendly_name: "Is Gravity Stable?"
         value_template: >
@@ -28,19 +33,21 @@ sensor:
           {{ current_reading == previous_reading }}
         unique_id: sensor_is_gravity_stable
 
+      # Calculate Alcohol By Volume (ABV) based on the original and final gravity readings
       abv:
         friendly_name: "Alcohol By Volume (ABV)"
         unit_of_measurement: "%"
         value_template: >
-          {% set og = states('input_number.original_gravity') | float(0) | default(0) %}
-          {% set fg = states('sensor.ispindel001_gravity') | float(0) | default(0) %}
-          {% if fg > 0 and og > 0 %}
+          {% set og = states('input_number.original_gravity') | float(0) %}
+          {% set fg = states('sensor.ispindel001_gravity') | float(0) %}
+          {% if og > 0 and fg > 0 %}
             {{ ((og - fg) * 131.25) | round(2) }}
           {% else %}
-            "unknown"
+            0
           {% endif %}
         unique_id: sensor_abv
 
+      # Determine if fermentation is active based on the CO2 level
       is_fermentation_active:
         friendly_name: "Is Fermentation Active?"
         value_template: >
@@ -48,11 +55,13 @@ sensor:
           {{ co2_level > 1000 }}  # Example threshold for CO2 level indicating active fermentation
         unique_id: sensor_is_fermentation_active
 
+      # Display the status of data being sent to BrewersFriend
       brewersfriend_status:
         friendly_name: "BrewersFriend Data Status"
         value_template: "{{ states('input_text.brewersfriend_status') }}"
         unique_id: sensor_brewersfriend_status
 
+      # Calculate the duration of fermentation since it started
       fermentation_duration:
         friendly_name: "Fermentation Duration"
         value_template: >
@@ -75,6 +84,7 @@ sensor:
           {% endif %}
         unique_id: sensor_fermentation_duration
 
+      # Calculate the battery percentage of the iSpindel based on its voltage
       ispindel_battery_percentage:
         friendly_name: "iSpindel Battery Percentage"
         unit_of_measurement: "%"
@@ -84,16 +94,24 @@ sensor:
           {{ percentage | round(0) }}
         unique_id: sensor_ispindel_battery_percentage
 
+      # Calculate the trend in gravity over time to determine if fermentation is progressing
       gravity_trend:
         friendly_name: "Gravity Trend"
         unit_of_measurement: "SG/hour"
         value_template: >
-          {% set current_gravity = states('sensor.ispindel001_gravity') | float(0) | default(0) %}
-          {% set previous_gravity = states('input_number.previous_gravity_reading') | float(0) | default(0) %}
+          {% set current_gravity = states('sensor.ispindel001_gravity') %}
+          {% set previous_gravity = states('input_number.previous_gravity_reading') | float(0) %}
           {% set duration_hours = (utcnow().timestamp() - as_timestamp(states('input_datetime.fermentation_start_time'))) / 3600 %}
-          {{ ((previous_gravity - current_gravity) / duration_hours) | round(4) if duration_hours > 0 else "unknown" }}
+          
+          {% if current_gravity == 'unknown' or duration_hours == 0 %}
+            unknown
+          {% else %}
+            {% set current_gravity = current_gravity | float %}
+            {{ ((previous_gravity - current_gravity) / duration_hours) | round(4) }}
+          {% endif %}
         unique_id: sensor_gravity_trend
 
+      # Estimate the time remaining until final gravity is reached based on the gravity trend
       estimated_time_to_fg:
         friendly_name: "Estimated Time to Final Gravity"
         unit_of_measurement: "hours"
@@ -104,10 +122,11 @@ sensor:
           {% if gravity_trend > 0 %}
             {{ ((current_gravity - final_gravity) / gravity_trend * 24) | round(1) }}
           {% else %}
-            "unknown"
+            "Unknown"
           {% endif %}
         unique_id: sensor_estimated_time_to_fg
 
+      # Determine the current phase of fermentation based on CO2 levels and gravity readings
       fermentation_phase:
         friendly_name: "Fermentation Phase"
         value_template: >

@@ -1,39 +1,52 @@
 # Inputs for manual adjustments and fermentation start
+
 input_number:
+  # Input to set the threshold for gravity stability, in hours
   gravity_stable_threshold:
     name: Gravity Stability Threshold
-    min: 1
-    max: 72
-    step: 1
+    min: 1 # Minimum threshold value
+    max: 72 # Maximum threshold value
+    step: 1 # Increment value
     unit_of_measurement: hours
-    mode: box
+    mode: box # Display mode for the input
 
+  # Input to manually set or update the previous gravity reading
   previous_gravity_reading:
     name: Previous Gravity Reading
-    min: 0.980
-    max: 1.200
-    step: 0.001
-    unit_of_measurement: "SG"
+    min: 0.980 # Minimum specific gravity value
+    max: 1.200 # Maximum specific gravity value
+    step: 0.001 # Increment value
+    unit_of_measurement: "SG" # Unit of measurement is specific gravity
 
+  # Input to set the original gravity before fermentation starts
   original_gravity:
     name: Original Gravity
-    min: 1.000
-    max: 1.200
-    step: 0.001
-    unit_of_measurement: "SG"
-    mode: box
+    min: 1.000 # Minimum original gravity value
+    max: 1.200 # Maximum original gravity value
+    step: 0.001 # Increment value
+    unit_of_measurement: "SG" # Unit of measurement is specific gravity
+    mode: box # Display mode for the input
 
 input_boolean:
+  # Toggle to indicate whether fermentation has started
   fermentation_started:
     name: Fermentation Started
-    icon: mdi:play-circle
+    icon: mdi:play-circle # Icon to represent the start of fermentation
 
+  # Toggle to enable or disable reporting data to BrewersFriend
   report_to_brewersfriend:
     name: Report to BrewersFriend
-    initial: off
 
 input_datetime:
+  # Input to record the start time of fermentation
   fermentation_start_time:
     name: Fermentation Start Time
-    has_date: true
-    has_time: true
+    has_date: true # Allows setting the date
+    has_time: true # Allows setting the time
+
+input_text:
+  # Text input to display the status of data being sent to BrewersFriend
+  brewersfriend_status:
+    name: BrewersFriend Data Status
+    initial: "Not Sent" # Initial status value
+    icon: mdi:cloud-upload # Icon to represent data upload status

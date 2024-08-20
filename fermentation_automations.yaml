@@ -1,4 +1,7 @@
+# Automation configuration for Home Assistant fermentation monitoring
+
 automation:
+  # Notify if the fermentation temperature exceeds 29°C for more than 10 minutes
   - alias: Notify High Fermentation Temperature
     trigger:
       platform: numeric_state
@@ -11,6 +14,7 @@ automation:
         data:
           message: "Warning: Fermentation temperature is above 29°C. Cooling may be needed."
 
+  # Start fermentation and record the start time
   - alias: Start Fermentation
     trigger:
       platform: state
@@ -23,6 +27,7 @@ automation:
         data:
           timestamp: "{{ now().timestamp() }}"
 
+  # Stop fermentation and reset the start time
   - alias: Stop Fermentation
     trigger:
       platform: state
@@ -35,10 +40,11 @@ automation:
         data:
           timestamp: "0"
 
+  # Update the previous gravity reading every 30 minutes
   - alias: Update Previous Gravity Reading
     trigger:
       platform: time_pattern
-      minutes: "/30"
+      minutes: "/30" # Runs every 30 minutes
     action:
       service: input_number.set_value
       target:
@@ -46,53 +52,58 @@ automation:
       data:
         value: "{{ states('sensor.ispindel001_gravity') | float(0) | default(0) }}"
 
+  # Notify when fermentation is complete based on gravity stability and CO2 levels
   - alias: Notify When Fermentation Complete
     trigger:
       platform: state
       entity_id: sensor.is_gravity_stable
       to: "True"
       for:
-        hours: "{{ states('input_number.gravity_stable_threshold') | int }}"
+        hours: "{{ states('input_number.gravity_stable_threshold') | int }}" # Configurable threshold in hours
     condition:
       condition: state
       entity_id: sensor.is_fermentation_active
-      state: "False"
+      state: "False" # Ensures fermentation is inactive
     action:
       - service: notify.mobile_app_dans_iphone14
         data:
           message: "Fermentation is complete. Gravity readings have been stable for {{ states('input_number.gravity_stable_threshold') }} hours and CO2 levels indicate fermentation is inactive."
 
+  # Periodically report data to BrewersFriend
   - alias: Report Data to BrewersFriend
     trigger:
       platform: time_pattern
-      minutes: "/15"
+      minutes: "/15" # Runs every 15 minutes
     condition:
       - condition: state
         entity_id: input_boolean.report_to_brewersfriend
-        state: "on"
+        state: "on" # Only report data if this input_boolean is on
     action:
       - service: script.report_to_brewersfriend
 
+  # Notify when the iSpindel battery is low
   - alias: Notify When iSpindel Battery is Low
     trigger:
       platform: numeric_state
       entity_id: sensor.ispindel001_battery_voltage
-      below: 3.3
+      below: 3.3 # Trigger when battery voltage drops below 3.3V
     action:
       - service: notify.mobile_app_dans_iphone14
         data:
           message: "Warning: iSpindel battery voltage is low ({{ states('sensor.ispindel001_battery_voltage') | float(0) }}V). Please recharge soon."
 
+  # Notify if there is an error sending data to BrewersFriend
   - alias: Notify When Error Sending Data to BrewersFriend
     trigger:
       platform: state
       entity_id: input_text.brewersfriend_status
-      to: "Failed to Send"
+      to: "Failed to Send" # Trigger when the status indicates a failure
     action:
       - service: notify.mobile_app_dans_iphone14
         data:
           message: "Error: Failed to send data to BrewersFriend."
 
+# Script to handle reporting data to BrewersFriend
 script:
   report_to_brewersfriend:
     sequence:
@@ -100,10 +111,10 @@ script:
         target:
           entity_id: input_text.brewersfriend_status
         data:
-          value: Sending data to BrewersFriend.com
+          value: Sending data to BrewersFriend.com # Set status to "Sending"
       - service: rest_command.report_to_brewersfriend
-        response_variable: brewersfriend_response
-      - if: "{{ brewersfriend_response.status == 200 }}"
+        response_variable: brewersfriend_response # Store the response
+      - if: "{{ brewersfriend_response.status == 200 }}" # Check if the response was successful
         then:
           - service: input_text.set_value
             target:
@@ -117,9 +128,10 @@ script:
             data:
               value: "Failed to Send"
 
+# REST command to send data to BrewersFriend
 rest_command:
   report_to_brewersfriend:
-    url: "https://log.brewersfriend.com/stream/95c241ab33c0b51e0307ddae67ce602040d12ea5"
+        url: "https://log.brewersfriend.com/stream/{{ secrets['brewersfriend_api_key'] }}"  # Replace with your API endpoint
     method: POST
     headers:
       Content-Type: "application/json"
